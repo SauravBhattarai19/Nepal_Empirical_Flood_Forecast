@@ -1,0 +1,68 @@
+# Settings of the Nepal empirical flood forecast. Everything here is optional:
+# a missing key takes the default in nepal_forecast/config.py. The forecast
+# reads this file again at every update.
+
+title: Nepal empirical flood forecast (experimental)
+timezone: Asia/Kathmandu
+every_hours: 2            # how often 'nepal-forecast serve' updates
+forecast_days: 7
+past_days: 7              # rain before now (antecedent moisture, runoff still in the rivers)
+show_past_hours: 24       # how much of that past the page shows
+
+# Weather models through Open-Meteo. The first is the main one.
+models:
+  - {id: ecmwf_ifs025, name: ECMWF IFS}
+  - {id: gfs_seamless, name: NOAA GFS}
+  - {id: icon_seamless, name: DWD ICON}
+
+open_meteo:
+  url: https://api.open-meteo.com/v1/forecast
+  # api_key: ...          # or the OPEN_METEO_API_KEY environment variable (commercial plan)
+  chunk: 100              # locations per request
+  pause_s: 1.0
+
+# If Open-Meteo cannot be reached: NOAA GFS read straight from AWS (needs eccodes)
+fallback_sources: [noaa_gfs_aws]
+
+runoff:
+  primary: scs            # what colours the map: scs (SCS-CN + unit hydrograph) or rational
+  ia_ratio: 0.2           # initial abstraction Ia = 0.2 S (SCS)
+  event_gap_h: 12         # this many dry hours end a storm event
+  dry_mm_h: 0.2
+  amc_dry_mm: 35.6        # 5-day antecedent rain thresholds for AMC I / III (NEH-4, growing season)
+  amc_wet_mm: 53.3
+  lag_ratio: 0.6          # SCS lag = 0.6 t_c
+  baseflow: WECS/DHM 1990 # normal flow of the month: WECS/DHM 1990, NEA 1997 or DHM 2004
+  baseflow_factor: 1.0
+  # Curve numbers (AMC II) by ESA WorldCover class. These enter the catchment
+  # descriptors at 'prepare' time; change them and run 'nepal-forecast prepare network'.
+  # (classes: 10 trees, 20 shrub, 30 grass, 40 cropland, 50 built-up, 60 bare, 70 snow/ice,
+  #  80 water, 90 wetland, 95 mangrove, 100 moss)
+  # cn_by_landcover: {10: 70, 20: 65, 30: 74, 40: 85, 50: 90, 60: 91, 70: 90, 80: 98, 90: 87, 95: 70, 100: 80}
+  # c_by_landcover:  {10: 0.30, 20: 0.30, 30: 0.30, 40: 0.50, 50: 0.865, 60: 0.25, 70: 0.90, 80: 1.0}
+
+thresholds:
+  return_periods: [2, 5, 10, 20, 50, 100]
+  statistic: median       # of WECS/DHM 1990, DHM 2004, MHSP 1997, WECS 2019, Modified Dickens: median | min | max
+  mhsp_split_lon: [83.0, 86.0]   # MHSP regions: west of 83 E western, east of 86 E eastern
+
+# Extra forecast points (snapped to the river whose drainage area matches best;
+# re-run 'nepal-forecast prepare network' after adding). Example:
+# points:
+#   - {name: "Example bridge", lat: 27.70, lon: 85.30, area_km2: 150}
+points: []
+
+# Known flood discharges (m3/s) of a station (DHM number) or of a point (its name),
+# e.g. from a frequency analysis of the gauge record or DHM's warning/danger flows.
+# They replace the formulas for the return periods given. Takes effect next update.
+# flood_levels:
+#   "283.3": {2: 150, 5: 260, 100: 700}
+#   "Example bridge": {2: 300}
+flood_levels: {}
+
+publish:
+  # Where the site goes after each update. GitHub Actions sets the remote itself.
+  # git: {remote: git@github.com:SauravBhattarai19/Nepal_Empirical_Flood_Forecast.git, branch: gh-pages}
+  # command: "rsync -a {site}/ user@server:/var/www/flood/"
+  git: null
+  command: null
