@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nepal Flood Forecast</title>
+<meta name="description" content="Experimental river-flow forecast for every river of Nepal from weather-model rain and Nepal's empirical flood formulas.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="leaflet.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect width='30' height='30' rx='7' fill='%231d6fb8'/%3E%3Cpath d='M5 11c3-2.5 5-2.5 8 0s5 2.5 8 0 3-2 4-1.4M5 17c3-2.5 5-2.5 8 0s5 2.5 8 0 3-2 4-1.4M5 23c3-2.5 5-2.5 8 0s5 2.5 8 0 3-2 4-1.4' stroke='%23e9f2f8' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="./">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+        <rect width="30" height="30" rx="7" fill="#1d6fb8"/>
+        <path d="M5 11c3-2.5 5-2.5 8 0s5 2.5 8 0 3-2 4-1.4M5 17c3-2.5 5-2.5 8 0s5 2.5 8 0 3-2 4-1.4M5 23c3-2.5 5-2.5 8 0s5 2.5 8 0 3-2 4-1.4"
+              stroke="#e9f2f8" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <span>Nepal flood forecast<small>Empirical methods · not an official warning</small></span>
+    </a>
+    <div class="updated" id="updated" aria-live="polite">Loading the forecast…</div>
+    <span class="spacer"></span>
+    <div class="seg" id="model-pick" role="group" aria-label="Weather model"></div>
+    <span class="pill exp">Experimental</span>
+  </div>
+</header>
+
+<div class="alerts" id="alerts" aria-label="Rivers above their flood levels"></div>
+
+<main class="dash">
+  <section class="panel p-list" aria-labelledby="h-list">
+    <div class="panel-head">
+      <h2 id="h-list">Rivers</h2>
+      <div class="seg small" id="list-pick" role="group" aria-label="List">
+        <button type="button" data-list="hot" aria-pressed="true">Hotspots</button>
+        <button type="button" data-list="basins" aria-pressed="false">Basins</button>
+        <button type="button" data-list="stations" aria-pressed="false">Stations</button>
+      </div>
+    </div>
+    <label class="search"><span class="vh">Search a river or station</span>
+      <input id="search" type="search" placeholder="Search a river, station or basin…" autocomplete="off">
+    </label>
+    <ul class="list" id="list"></ul>
+  </section>
+
+  <section class="panel p-map" aria-labelledby="h-map">
+    <div class="map-tools">
+      <h2 id="h-map">Map</h2>
+      <div class="seg small" id="layer-pick" role="group" aria-label="Map layer">
+        <button type="button" data-layer="flow" aria-pressed="true">River flow</button>
+        <button type="button" data-layer="rain" aria-pressed="false">Rain forecast</button>
+      </div>
+      <label class="rain-only">Rain
+        <select id="rain-win">
+          <option value="next24">next 24 h</option>
+          <option value="next72">next 3 days</option>
+          <option value="next168">next 7 days</option>
+          <option value="past24">past 24 h</option>
+          <option value="step" selected>3-hourly…</option>
+        </select>
+      </label>
+      <label>Base map
+        <select id="base-pick">
+          <option value="terrain">Terrain</option>
+          <option value="streets">Streets</option>
+          <option value="satellite">Satellite</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+    </div>
+    <div class="map-wrap">
+      <div id="map" role="region" aria-label="Map of Nepal's rivers coloured by forecast flood level"></div>
+      <div class="legend" id="legend" aria-label="Legend"></div>
+      <div class="player" id="player" hidden>
+        <button type="button" id="play" aria-label="Play">▶</button>
+        <input type="range" id="step" min="0" max="0" value="0" aria-label="Time step">
+        <span id="step-label"></span>
+      </div>
+    </div>
+    <p class="readout" id="readout">Each river is coloured by the highest flood its forecast reaches in the coming days,
+      measured against the 2- to 100-year floods of Nepal's regional formulas. Click a river for its hydrograph.</p>
+  </section>
+
+  <section class="panel p-focus" aria-labelledby="h-focus">
+    <div class="panel-head"><h2 id="h-focus">Selected point</h2></div>
+    <div id="focus"><p class="muted">Click a river on the map, or pick one from the list.</p></div>
+  </section>
+
+  <section class="panel p-chart" aria-labelledby="h-chart">
+    <div class="panel-head">
+      <h2 id="h-chart">Forecast</h2>
+      <div class="seg small" id="method-pick" role="group" aria-label="Method">
+        <button type="button" data-method="scs" aria-pressed="true">SCS-CN + unit hydrograph</button>
+        <button type="button" data-method="rational" aria-pressed="false">Rational</button>
+        <button type="button" data-method="daily" aria-pressed="false">Daily peaks</button>
+      </div>
+      <button type="button" class="linkish" id="table-toggle" aria-expanded="false">Table</button>
+    </div>
+    <div id="chart" class="chart" role="img" aria-label="Hydrograph"></div>
+    <p class="chart-note" id="chart-note"></p>
+    <div id="chart-table" class="table-wrap" hidden></div>
+  </section>
+</main>
+
+<section class="about block" aria-labelledby="h-about">
+  <h2 id="h-about">How this forecast is made</h2>
+  <div class="about-grid">
+    <p><strong>Rivers and basins.</strong> Traced from the Copernicus 90 m DEM: every river of Nepal draining at
+      least 20 km², 4,200 reaches. The traced drainage areas match 105 of the 112 published DHM stations within 10%.</p>
+    <p><strong>Rain.</strong> Hourly forecasts of ECMWF IFS, NOAA GFS and DWD ICON (through Open-Meteo), on a
+      0.25° grid, averaged over the catchment above each river reach. Updated every 2 hours.</p>
+    <p><strong>Discharge.</strong> The rainfall-based methods used in Nepal: SCS curve number with the SCS unit
+      hydrograph (main method), the Rational method, and the Mononobe-Rational and B.D. Richards daily peaks,
+      over the normal flow of the month (WECS/DHM 1990).</p>
+    <p><strong>Flood levels.</strong> The 2- to 100-year floods of the area-based regional methods: WECS/DHM 1990,
+      DHM 2004, MHSP 1997, WECS 2019 specific discharge and Modified Dickens (median of the methods).</p>
+  </div>
+  <p>New to the page? The <a href="https://github.com/SauravBhattarai19/Nepal_Empirical_Flood_Forecast/blob/main/docs/user-guide.md">user
+    guide</a> explains the map, the five model views, the river panel and the chart, with screenshots.</p>
+</section>
+
+<footer class="foot">
+  <p id="notice"><strong>Experimental research product.</strong> These are computer estimates made automatically from
+    weather-model rain and empirical formulas that have not been checked against measured floods at these rivers.
+    They are not warnings. Follow the official warnings of the Department of Hydrology and Meteorology
+    (<a href="https://www.hydrology.gov.np">hydrology.gov.np</a>) and local authorities.</p>
+  <p>Rain: <a href="https://open-meteo.com">Open-Meteo</a> (CC BY 4.0) with ECMWF, NOAA and DWD data. Terrain:
+    Copernicus GLO-90 DEM © DLR/ESA, ESA WorldCover 2021, ERA5 (Copernicus C3S). Formulas: WECS/DHM 1990, DHM 2004,
+    MHSP 1997, WECS 2019, USDA SCS. Maps © OpenStreetMap contributors, OpenTopoMap, Esri.</p>
+</footer>
+<script src="leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
